@@ -100,7 +100,7 @@ export function useOnboarding() {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async function saveTeamMember(companyId: string, member: TeamMemberData) {
+  async function saveTeamMember(_companyId: string, member: TeamMemberData) {
     setLoading(true)
     await supabase.from('profiles').insert({
       name: member.name,
