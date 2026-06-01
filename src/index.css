@@ -5,3 +5,14 @@
 
 * { box-sizing: border-box; }
 body { font-family: system-ui, -apple-system, sans-serif; }
+.dark { color-scheme: dark; }
+.dark .bg-white { background-color: #1A1A1A !important; }
+.dark .bg-gray-50 { background-color: #111 !important; }
+.dark .bg-gray-100 { background-color: #1A1A1A !important; }
+.dark .text-gray-900 { color: #F5F5F5 !important; }
+.dark .text-gray-700 { color: #CCC !important; }
+.dark .text-gray-600 { color: #AAA !important; }
+.dark .text-gray-500 { color: #888 !important; }
+.dark .text-gray-400 { color: #666 !important; }
+.dark .border-gray-200 { border-color: #2A2A2A !important; }
+.dark .border-gray-100 { border-color: #1A1A1A !important; }
