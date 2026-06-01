@@ -101,11 +101,7 @@ export function useOnboarding() {
 
   async function saveTeamMember(companyId: string, member: TeamMemberData) {
     setLoading(true)
-    const { data: authUser, error: authError } = await supabase.auth.admin
-      ? { data: null, error: new Error('use invite') }
-      : { data: null, error: null }
-
-    const { error } = await supabase.from('profiles').insert({
+    await supabase.from('profiles').insert({
       company_id: companyId,
       name: member.name,
       role: member.role,

@@ -22,7 +22,6 @@ export default function MISDashboard() {
     role: 'crm', task: '', tat: '', frequency: 'daily', order: 0
 })
 
-  const today = new Date().toISOString().split('T')[0]
   const totalTasks = stats.reduce((a, s) => a + s.total, 0)
   const totalDone = stats.reduce((a, s) => a + s.done, 0)
   const overallPct = totalTasks ? Math.round(totalDone / totalTasks * 100) : 0
