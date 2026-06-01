@@ -14,12 +14,12 @@ export function useMIS() {
   const [processes, setProcesses] = useState<FMSProcess[]>([])
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([])
   const [loading, setLoading] = useState(true)
-  const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
+    const today = new Date().toISOString().split('T')[0]
     const [{ data: profiles }, { data: procs }, { data: tmpl }] = await Promise.all([
       supabase.from('profiles').select('*'),
       supabase.from('fms_processes').select('*').order('code'),
