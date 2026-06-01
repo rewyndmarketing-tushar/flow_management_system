@@ -5,8 +5,8 @@ type Member = { id: string; name: string; role: string }
 type Task = { id: string; title: string; type: string; priority: string }
 
 const FILTERS = ['Today', 'Weekly', 'Monthly', 'Yearly']
-const PRIORITY_COLOR: Record<string, string> = { high: '#dc2626', medium: '#d97706', low: '#16a34a' }
-const TYPE_COLOR: Record<string, string> = { daily: '#1565C0', weekly: '#6A1B9A', monthly: '#2E7D32' }
+const PRIORITY_COLOR: Record<string, string> = { high: '#DC2626', medium: '#D97706', low: '#16A34A' }
+const TYPE_COLOR: Record<string, string> = { daily: '#1D4ED8', weekly: '#7C3AED', monthly: '#15803D' }
 const ROLE_COLOR: Record<string, string> = {
   owner: '#3C3489', mis: '#26215C', crm: '#993C1D',
   'pc-purchase': '#E65100', 'pc-finance': '#854F0B',
@@ -21,6 +21,7 @@ export default function EmpViewPage() {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [sortByPriority, setSortByPriority] = useState(false)
+  const [showCompleted, setShowCompleted] = useState(false)
 
   useEffect(() => { fetchMembers() }, [])
   useEffect(() => { if (selectedMember) fetchTasks(selectedMember.id) }, [selectedMember, filter])
@@ -65,7 +66,8 @@ export default function EmpViewPage() {
   const completed = tasks.filter(t => completedIds.has(t.id))
   const pending = tasks.filter(t => !completedIds.has(t.id))
   const pct = tasks.length > 0 ? Math.round((completed.length / tasks.length) * 100) : 0
-  const pctColor = (p: number) => p >= 80 ? '#16a34a' : p >= 50 ? '#d97706' : '#dc2626'
+  const pctColor = (p: number) => p >= 80 ? '#16A34A' : p >= 50 ? '#D97706' : '#DC2626'
+  const pctBg = (p: number) => p >= 80 ? '#F0FDF4' : p >= 50 ? '#FFFBEB' : '#FEF2F2'
   const roleColor = ROLE_COLOR[selectedMember?.role || ''] || '#555'
 
   const sortedPending = sortByPriority
@@ -75,124 +77,152 @@ export default function EmpViewPage() {
       })
     : pending
 
+  const displayTasks = showCompleted ? [...sortedPending, ...completed] : sortedPending
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Employee View</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Task completion by team member</p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', margin: 0 }}>Employee View</h1>
+          <p style={{ fontSize: 13, color: '#9CA3AF', margin: '2px 0 0' }}>Task completion by team member</p>
         </div>
-        <button onClick={() => setSortByPriority(p => !p)}
-          className={`px-4 py-2 text-sm font-semibold rounded-lg border transition ${
-            sortByPriority ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-          }`}>
-          ↑ Sort by Priority
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {FILTERS.map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', border: '1px solid',
+              backgroundColor: filter === f ? '#111' : '#fff',
+              borderColor: filter === f ? '#111' : '#E5E7EB',
+              color: filter === f ? '#fff' : '#555',
+            }}>{f}</button>
+          ))}
+          <button onClick={() => setSortByPriority(p => !p)} style={{
+            padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+            cursor: 'pointer', border: '1px solid',
+            backgroundColor: sortByPriority ? '#8B1A1A' : '#fff',
+            borderColor: sortByPriority ? '#8B1A1A' : '#E5E7EB',
+            color: sortByPriority ? '#fff' : '#555',
+          }}>↑ Priority</button>
+        </div>
       </div>
 
-      {/* Member selector */}
-      <div className="flex gap-2 flex-wrap mb-4">
+      {/* Member tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #E5E7EB', overflowX: 'auto' }}>
         {members.map(m => {
           const color = ROLE_COLOR[m.role] || '#555'
           const isSelected = selectedMember?.id === m.id
           return (
-            <button key={m.id} onClick={() => setSelectedMember(m)}
-              className="px-4 py-2 text-sm font-semibold rounded-lg border transition"
-              style={{
-                backgroundColor: isSelected ? color + '18' : '#fff',
-                borderColor: isSelected ? color : '#e5e7eb',
-                color: isSelected ? color : '#6b7280',
-              }}>
+            <button key={m.id} onClick={() => setSelectedMember(m)} style={{
+              padding: '8px 16px', fontSize: 13, fontWeight: 600,
+              border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+              borderBottom: isSelected ? `2px solid ${color}` : '2px solid transparent',
+              color: isSelected ? color : '#9CA3AF',
+              marginBottom: -1,
+            }}>
               {m.name}
-              <span className="ml-1.5 text-xs opacity-60">{m.role}</span>
+              <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.6 }}>{m.role}</span>
             </button>
           )
         })}
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-2 mb-6">
-        {FILTERS.map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`px-4 py-2 text-sm font-semibold rounded-lg border transition ${
-              filter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-            }`}>
-            {f}
-          </button>
+      {/* Member info + stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr 1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+        <div style={{
+          backgroundColor: roleColor + '12', borderRadius: 8, padding: '12px 16px',
+          border: `1px solid ${roleColor}30`, display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 18, flexShrink: 0,
+            backgroundColor: roleColor + '22', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', fontSize: 16, fontWeight: 800, color: roleColor,
+          }}>{selectedMember?.name?.charAt(0)?.toUpperCase()}</div>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#111', margin: 0 }}>{selectedMember?.name}</p>
+            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 3, backgroundColor: roleColor + '22', color: roleColor }}>{selectedMember?.role}</span>
+          </div>
+        </div>
+        {[
+          { label: 'Total', value: tasks.length, color: '#374151', bg: '#F9FAFB' },
+          { label: 'Completed', value: completed.length, color: '#16A34A', bg: '#F0FDF4' },
+          { label: 'Pending', value: pending.length, color: '#D97706', bg: '#FFFBEB' },
+          { label: 'Rate', value: `${pct}%`, color: pctColor(pct), bg: pctBg(pct) },
+        ].map(s => (
+          <div key={s.label} style={{
+            backgroundColor: s.bg, borderRadius: 8, padding: '12px 16px',
+            display: 'flex', alignItems: 'center', gap: 10, border: '1px solid #E5E7EB',
+          }}>
+            <p style={{ fontSize: 22, fontWeight: 800, color: s.color, margin: 0 }}>{s.value}</p>
+            <p style={{ fontSize: 12, color: '#6B7280', margin: 0 }}>{s.label}</p>
+          </div>
         ))}
       </div>
 
-      {loading ? <p className="text-center text-gray-400 py-20 text-sm">Loading…</p> : (
-        <>
-          {/* Summary */}
-          <div className="bg-white rounded-2xl border p-6 mb-6" style={{ borderColor: roleColor + '44' }}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-black"
-                style={{ backgroundColor: roleColor + '18', color: roleColor }}>
-                {selectedMember?.name?.charAt(0)?.toUpperCase()}
-              </div>
-              <div>
-                <p className="font-bold text-gray-900">{selectedMember?.name}</p>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: roleColor + '18', color: roleColor }}>
-                  {selectedMember?.role}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-end gap-4 mb-3">
-              <p className="text-5xl font-black" style={{ color: pctColor(pct) }}>{pct}%</p>
-              <div className="pb-2 flex gap-4 text-sm text-gray-400">
-                <span>✓ {completed.length} done</span>
-                <span>⏳ {pending.length} pending</span>
-                <span>total {tasks.length}</span>
-              </div>
-            </div>
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pctColor(pct) }} />
-            </div>
+      {/* Progress bar */}
+      <div style={{ height: 4, backgroundColor: '#F3F4F6', borderRadius: 2, marginBottom: 20, overflow: 'hidden' }}>
+        <div style={{ height: 4, borderRadius: 2, width: `${pct}%`, backgroundColor: pctColor(pct), transition: 'width 0.3s' }} />
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ color: '#9CA3AF', fontSize: 13 }}>Loading…</p>
+        </div>
+      ) : (
+        <div style={{ backgroundColor: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: '2fr 100px 100px 80px',
+            backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB',
+            padding: '10px 16px', gap: 12,
+          }}>
+            {['Task', 'Type', 'Priority', 'Status'].map(h => (
+              <p key={h} style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>{h}</p>
+            ))}
           </div>
 
-          {/* Pending */}
-          {sortedPending.length > 0 && (
-            <>
-              <h2 className="text-xs font-bold text-gray-400 tracking-widest mb-3">PENDING</h2>
-              <div className="grid gap-3 mb-6">
-                {sortedPending.map(t => (
-                  <div key={t.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="font-semibold text-gray-900">{t.title}</p>
-                      <span className="text-xs font-bold px-2 py-1 rounded-lg"
-                        style={{ backgroundColor: (PRIORITY_COLOR[t.priority] || '#555') + '18', color: PRIORITY_COLOR[t.priority] || '#555' }}>
-                        {t.priority}
-                      </span>
-                    </div>
-                    <span className="text-xs font-bold px-2 py-1 rounded-lg"
-                      style={{ backgroundColor: (TYPE_COLOR[t.type] || '#555') + '18', color: TYPE_COLOR[t.type] || '#555' }}>
-                      {t.type}
-                    </span>
-                  </div>
-                ))}
+          {displayTasks.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center' }}>
+              <p style={{ color: '#9CA3AF', fontSize: 13 }}>No tasks assigned to this member</p>
+            </div>
+          ) : displayTasks.map((t, i) => {
+            const isDone = completedIds.has(t.id)
+            return (
+              <div key={t.id} style={{
+                display: 'grid', gridTemplateColumns: '2fr 100px 100px 80px',
+                padding: '12px 16px', gap: 12, alignItems: 'center',
+                borderBottom: i < displayTasks.length - 1 ? '1px solid #F3F4F6' : 'none',
+                backgroundColor: isDone ? '#FAFAFA' : i % 2 === 0 ? '#fff' : '#FAFAFA',
+                opacity: isDone ? 0.6 : 1,
+              }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: isDone ? '#9CA3AF' : '#111', margin: 0, textDecoration: isDone ? 'line-through' : 'none' }}>
+                  {isDone ? '✓ ' : ''}{t.title}
+                </p>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, backgroundColor: (TYPE_COLOR[t.type] || '#555') + '18', color: TYPE_COLOR[t.type] || '#555', width: 'fit-content' }}>
+                  {t.type}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, backgroundColor: (PRIORITY_COLOR[t.priority] || '#555') + '18', color: PRIORITY_COLOR[t.priority] || '#555', width: 'fit-content' }}>
+                  {t.priority}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, backgroundColor: isDone ? '#DCFCE7' : '#FEF9C3', color: isDone ? '#16A34A' : '#CA8A04', width: 'fit-content' }}>
+                  {isDone ? 'Done' : 'Pending'}
+                </span>
               </div>
-            </>
-          )}
-
-          {/* Completed */}
-          {completed.length > 0 && (
-            <>
-              <h2 className="text-xs font-bold text-gray-400 tracking-widest mb-3">COMPLETED</h2>
-              <div className="grid gap-3">
-                {completed.map(t => (
-                  <div key={t.id} className="bg-white rounded-xl border border-gray-100 p-4 opacity-50">
-                    <p className="text-sm text-gray-500 line-through">✓ {t.title}</p>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {tasks.length === 0 && <p className="text-center text-gray-400 py-20 text-sm">No tasks assigned</p>}
-        </>
+            )
+          })}
+        </div>
       )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
+        <p style={{ fontSize: 12, color: '#9CA3AF', margin: 0 }}>
+          {pending.length} pending · {completed.length} completed
+        </p>
+        <button onClick={() => setShowCompleted(p => !p)} style={{
+          fontSize: 12, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer',
+        }}>
+          {showCompleted ? 'Hide completed' : 'Show completed'}
+        </button>
+      </div>
     </div>
   )
 }

@@ -5,8 +5,8 @@ type Dept = { id: string; name: string }
 type Task = { id: string; title: string; type: string; priority: string; assigned: any }
 
 const FILTERS = ['Today', 'Weekly', 'Monthly', 'Yearly']
-const PRIORITY_COLOR: Record<string, string> = { high: '#dc2626', medium: '#d97706', low: '#16a34a' }
-const TYPE_COLOR: Record<string, string> = { daily: '#1565C0', weekly: '#6A1B9A', monthly: '#2E7D32' }
+const PRIORITY_COLOR: Record<string, string> = { high: '#DC2626', medium: '#D97706', low: '#16A34A' }
+const TYPE_COLOR: Record<string, string> = { daily: '#1D4ED8', weekly: '#7C3AED', monthly: '#15803D' }
 
 export default function DeptViewPage() {
   const [filter, setFilter] = useState('Today')
@@ -16,6 +16,7 @@ export default function DeptViewPage() {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [sortByPriority, setSortByPriority] = useState(false)
+  const [showCompleted, setShowCompleted] = useState(false)
 
   useEffect(() => { fetchDepts() }, [])
   useEffect(() => { if (selectedDept) fetchTasks(selectedDept.id) }, [selectedDept, filter])
@@ -59,7 +60,8 @@ export default function DeptViewPage() {
   const completed = tasks.filter(t => completedIds.has(t.id))
   const pending = tasks.filter(t => !completedIds.has(t.id))
   const pct = tasks.length > 0 ? Math.round((completed.length / tasks.length) * 100) : 0
-  const pctColor = (p: number) => p >= 80 ? '#16a34a' : p >= 50 ? '#d97706' : '#dc2626'
+  const pctColor = (p: number) => p >= 80 ? '#16A34A' : p >= 50 ? '#D97706' : '#DC2626'
+  const pctBg = (p: number) => p >= 80 ? '#F0FDF4' : p >= 50 ? '#FFFBEB' : '#FEF2F2'
 
   const sortedPending = sortByPriority
     ? [...pending].sort((a, b) => {
@@ -68,108 +70,132 @@ export default function DeptViewPage() {
       })
     : pending
 
+  const displayTasks = showCompleted ? [...sortedPending, ...completed] : sortedPending
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Department View</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Task completion by department</p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', margin: 0 }}>Department View</h1>
+          <p style={{ fontSize: 13, color: '#9CA3AF', margin: '2px 0 0' }}>Task completion by department</p>
         </div>
-        <button onClick={() => setSortByPriority(p => !p)}
-          className={`px-4 py-2 text-sm font-semibold rounded-lg border transition ${
-            sortByPriority ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-          }`}>
-          ↑ Sort by Priority
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {FILTERS.map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', border: '1px solid',
+              backgroundColor: filter === f ? '#111' : '#fff',
+              borderColor: filter === f ? '#111' : '#E5E7EB',
+              color: filter === f ? '#fff' : '#555',
+            }}>{f}</button>
+          ))}
+          <button onClick={() => setSortByPriority(p => !p)} style={{
+            padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+            cursor: 'pointer', border: '1px solid',
+            backgroundColor: sortByPriority ? '#8B1A1A' : '#fff',
+            borderColor: sortByPriority ? '#8B1A1A' : '#E5E7EB',
+            color: sortByPriority ? '#fff' : '#555',
+          }}>↑ Priority</button>
+        </div>
       </div>
 
-      {/* Dept selector */}
-      <div className="flex gap-2 flex-wrap mb-4">
+      {/* Dept tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #E5E7EB', overflowX: 'auto' }}>
         {depts.map(d => (
-          <button key={d.id} onClick={() => setSelectedDept(d)}
-            className={`px-4 py-2 text-sm font-semibold rounded-lg border transition ${
-              selectedDept?.id === d.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-            }`}>
-            {d.name}
-          </button>
+          <button key={d.id} onClick={() => setSelectedDept(d)} style={{
+            padding: '8px 16px', fontSize: 13, fontWeight: 600,
+            border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+            borderBottom: selectedDept?.id === d.id ? '2px solid #111' : '2px solid transparent',
+            color: selectedDept?.id === d.id ? '#111' : '#9CA3AF',
+            marginBottom: -1,
+          }}>{d.name}</button>
         ))}
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-2 mb-6">
-        {FILTERS.map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`px-4 py-2 text-sm font-semibold rounded-lg border transition ${
-              filter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-            }`}>
-            {f}
-          </button>
+      {/* Stats row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+        {[
+          { label: 'Total Tasks', value: tasks.length, color: '#374151', bg: '#F9FAFB' },
+          { label: 'Completed', value: completed.length, color: '#16A34A', bg: '#F0FDF4' },
+          { label: 'Pending', value: pending.length, color: '#D97706', bg: '#FFFBEB' },
+          { label: 'Completion', value: `${pct}%`, color: pctColor(pct), bg: pctBg(pct) },
+        ].map(s => (
+          <div key={s.label} style={{
+            backgroundColor: s.bg, borderRadius: 8, padding: '12px 16px',
+            display: 'flex', alignItems: 'center', gap: 10, border: '1px solid #E5E7EB',
+          }}>
+            <p style={{ fontSize: 22, fontWeight: 800, color: s.color, margin: 0 }}>{s.value}</p>
+            <p style={{ fontSize: 12, color: '#6B7280', margin: 0 }}>{s.label}</p>
+          </div>
         ))}
       </div>
 
-      {loading ? <p className="text-center text-gray-400 py-20 text-sm">Loading…</p> : (
-        <>
-          {/* Summary */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-            <p className="text-lg font-bold text-gray-900 mb-1">{selectedDept?.name}</p>
-            <div className="flex items-end gap-4 mb-3">
-              <p className="text-5xl font-black" style={{ color: pctColor(pct) }}>{pct}%</p>
-              <div className="pb-2 flex gap-4 text-sm text-gray-400">
-                <span>✓ {completed.length} done</span>
-                <span>⏳ {pending.length} pending</span>
-                <span>total {tasks.length}</span>
-              </div>
-            </div>
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pctColor(pct) }} />
-            </div>
+      {/* Progress bar */}
+      <div style={{ height: 4, backgroundColor: '#F3F4F6', borderRadius: 2, marginBottom: 20, overflow: 'hidden' }}>
+        <div style={{ height: 4, borderRadius: 2, width: `${pct}%`, backgroundColor: pctColor(pct), transition: 'width 0.3s' }} />
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ color: '#9CA3AF', fontSize: 13 }}>Loading…</p>
+        </div>
+      ) : (
+        <div style={{ backgroundColor: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: '2fr 100px 100px 100px',
+            backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB',
+            padding: '10px 16px', gap: 12,
+          }}>
+            {['Task', 'Type', 'Priority', 'Assigned To'].map(h => (
+              <p key={h} style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>{h}</p>
+            ))}
           </div>
 
-          {/* Pending */}
-          {sortedPending.length > 0 && (
-            <>
-              <h2 className="text-xs font-bold text-gray-400 tracking-widest mb-3">PENDING</h2>
-              <div className="grid gap-3 mb-6">
-                {sortedPending.map(t => (
-                  <div key={t.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="font-semibold text-gray-900">{t.title}</p>
-                      <span className="text-xs font-bold px-2 py-1 rounded-lg"
-                        style={{ backgroundColor: (PRIORITY_COLOR[t.priority] || '#555') + '18', color: PRIORITY_COLOR[t.priority] || '#555' }}>
-                        {t.priority}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold px-2 py-1 rounded-lg"
-                        style={{ backgroundColor: (TYPE_COLOR[t.type] || '#555') + '18', color: TYPE_COLOR[t.type] || '#555' }}>
-                        {t.type}
-                      </span>
-                      {t.assigned && <span className="text-xs text-gray-400">👤 {(t.assigned as any).name}</span>}
-                    </div>
-                  </div>
-                ))}
+          {displayTasks.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center' }}>
+              <p style={{ color: '#9CA3AF', fontSize: 13 }}>No tasks for this department</p>
+            </div>
+          ) : displayTasks.map((t, i) => {
+            const isDone = completedIds.has(t.id)
+            return (
+              <div key={t.id} style={{
+                display: 'grid', gridTemplateColumns: '2fr 100px 100px 100px',
+                padding: '12px 16px', gap: 12, alignItems: 'center',
+                borderBottom: i < displayTasks.length - 1 ? '1px solid #F3F4F6' : 'none',
+                backgroundColor: isDone ? '#FAFAFA' : i % 2 === 0 ? '#fff' : '#FAFAFA',
+                opacity: isDone ? 0.6 : 1,
+              }}>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: isDone ? '#9CA3AF' : '#111', margin: 0, textDecoration: isDone ? 'line-through' : 'none' }}>
+                    {isDone ? '✓ ' : ''}{t.title}
+                  </p>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, backgroundColor: (TYPE_COLOR[t.type] || '#555') + '18', color: TYPE_COLOR[t.type] || '#555', width: 'fit-content' }}>
+                  {t.type}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, backgroundColor: (PRIORITY_COLOR[t.priority] || '#555') + '18', color: PRIORITY_COLOR[t.priority] || '#555', width: 'fit-content' }}>
+                  {t.priority}
+                </span>
+                <p style={{ fontSize: 12, color: '#6B7280', margin: 0 }}>{t.assigned?.name || '—'}</p>
               </div>
-            </>
-          )}
-
-          {/* Completed */}
-          {completed.length > 0 && (
-            <>
-              <h2 className="text-xs font-bold text-gray-400 tracking-widest mb-3">COMPLETED</h2>
-              <div className="grid gap-3">
-                {completed.map(t => (
-                  <div key={t.id} className="bg-white rounded-xl border border-gray-100 p-4 opacity-50">
-                    <p className="text-sm text-gray-500 line-through">✓ {t.title}</p>
-                    {t.assigned && <p className="text-xs text-gray-400 mt-1">👤 {(t.assigned as any).name}</p>}
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {tasks.length === 0 && <p className="text-center text-gray-400 py-20 text-sm">No tasks for this department</p>}
-        </>
+            )
+          })}
+        </div>
       )}
+
+      {/* Footer */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
+        <p style={{ fontSize: 12, color: '#9CA3AF', margin: 0 }}>
+          {pending.length} pending · {completed.length} completed
+        </p>
+        <button onClick={() => setShowCompleted(p => !p)} style={{
+          fontSize: 12, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer',
+        }}>
+          {showCompleted ? 'Hide completed' : 'Show completed'}
+        </button>
+      </div>
     </div>
   )
 }

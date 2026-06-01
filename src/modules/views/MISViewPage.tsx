@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
 type DeptStat = { id: string; name: string; total: number; completed: number; pending: number }
 type MemberStat = { id: string; name: string; role: string; total: number; completed: number }
@@ -14,6 +15,7 @@ export default function MISViewPage() {
   const [totalTasks, setTotalTasks] = useState(0)
   const [completedTasks, setCompletedTasks] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [view, setView] = useState<'dept' | 'member'>('dept')
 
   useEffect(() => { fetchStats() }, [filter])
 
@@ -50,9 +52,7 @@ export default function MISViewPage() {
     })
 
     const deptMap: Record<string, DeptStat> = {}
-    ;(depts || []).forEach(d => {
-      deptMap[d.id] = { id: d.id, name: d.name, total: 0, completed: 0, pending: 0 }
-    })
+    ;(depts || []).forEach(d => { deptMap[d.id] = { id: d.id, name: d.name, total: 0, completed: 0, pending: 0 } })
     ;(tasks || []).forEach(t => {
       if (t.department_id && deptMap[t.department_id]) {
         deptMap[t.department_id].total++
@@ -68,120 +68,165 @@ export default function MISViewPage() {
       completed: completedByMember[m.id] || 0,
     })).filter(m => m.total > 0)
     setMemberStats(memberList)
-
     setTotalTasks(tasks?.length || 0)
     setCompletedTasks(completedIds.size)
     setLoading(false)
   }
 
   const overallPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+  const pctColor = (p: number) => p >= 80 ? '#16A34A' : p >= 50 ? '#D97706' : '#DC2626'
+  const pctBg = (p: number) => p >= 80 ? '#DCFCE7' : p >= 50 ? '#FEF9C3' : '#FEE2E2'
 
   const sortedDepts = sortByPriority ? [...deptStats].sort((a, b) => b.pending - a.pending) : deptStats
   const sortedMembers = sortByPriority ? [...memberStats].sort((a, b) => (b.total - b.completed) - (a.total - a.completed)) : memberStats
 
-  const pctColor = (pct: number) => pct >= 80 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626'
-
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">MIS View</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Company-wide task completion overview</p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', margin: 0 }}>MIS View</h1>
+          <p style={{ fontSize: 13, color: '#9CA3AF', margin: '2px 0 0' }}>Company-wide task completion overview</p>
         </div>
-        <button onClick={() => setSortByPriority(p => !p)}
-          className={`px-4 py-2 text-sm font-semibold rounded-lg border transition ${
-            sortByPriority ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-          }`}>
-          ↑ Sort by Pending
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {FILTERS.map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', border: '1px solid',
+              backgroundColor: filter === f ? '#111' : '#fff',
+              borderColor: filter === f ? '#111' : '#E5E7EB',
+              color: filter === f ? '#fff' : '#555',
+            }}>{f}</button>
+          ))}
+          <button onClick={() => setSortByPriority(p => !p)} style={{
+            padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+            cursor: 'pointer', border: '1px solid',
+            backgroundColor: sortByPriority ? '#8B1A1A' : '#fff',
+            borderColor: sortByPriority ? '#8B1A1A' : '#E5E7EB',
+            color: sortByPriority ? '#fff' : '#555',
+          }}>↑ Pending First</button>
+        </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-2 mb-6">
-        {FILTERS.map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`px-4 py-2 text-sm font-semibold rounded-lg border transition ${
-              filter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-            }`}>
-            {f}
-          </button>
+      {/* Overall stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+        {[
+          { label: 'Total Tasks', value: totalTasks, color: '#374151', bg: '#F9FAFB' },
+          { label: 'Completed', value: completedTasks, color: '#16A34A', bg: '#F0FDF4' },
+          { label: 'Pending', value: totalTasks - completedTasks, color: '#D97706', bg: '#FFFBEB' },
+          { label: 'Completion Rate', value: `${overallPct}%`, color: pctColor(overallPct), bg: pctBg(overallPct) },
+        ].map(s => (
+          <div key={s.label} style={{
+            backgroundColor: s.bg, borderRadius: 8, padding: '14px 16px',
+            display: 'flex', alignItems: 'center', gap: 12,
+            border: '1px solid #E5E7EB',
+          }}>
+            <p style={{ fontSize: 24, fontWeight: 800, color: s.color, margin: 0 }}>{s.value}</p>
+            <p style={{ fontSize: 12, color: '#6B7280', margin: 0 }}>{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* View toggle */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #E5E7EB' }}>
+        {[{ key: 'dept', label: 'By Department' }, { key: 'member', label: 'By Team Member' }].map(v => (
+          <button key={v.key} onClick={() => setView(v.key as any)} style={{
+            padding: '8px 16px', fontSize: 13, fontWeight: 600,
+            border: 'none', background: 'none', cursor: 'pointer',
+            borderBottom: view === v.key ? '2px solid #111' : '2px solid transparent',
+            color: view === v.key ? '#111' : '#9CA3AF',
+            marginBottom: -1,
+          }}>{v.label}</button>
         ))}
       </div>
 
       {loading ? (
-        <p className="text-center text-gray-400 py-20 text-sm">Loading…</p>
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ color: '#9CA3AF', fontSize: 13 }}>Loading…</p>
+        </div>
       ) : (
-        <>
-          {/* Overall summary */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-            <p className="text-xs text-gray-400 font-bold tracking-widest mb-2">OVERALL COMPLETION</p>
-            <div className="flex items-end gap-4 mb-3">
-              <p className="text-5xl font-black" style={{ color: pctColor(overallPct) }}>{overallPct}%</p>
-              <div className="pb-2 flex gap-4 text-sm text-gray-400">
-                <span>✓ {completedTasks} done</span>
-                <span>⏳ {totalTasks - completedTasks} pending</span>
-                <span>total {totalTasks}</span>
-              </div>
-            </div>
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-2 rounded-full transition-all" style={{ width: `${overallPct}%`, backgroundColor: pctColor(overallPct) }} />
-            </div>
+        <div style={{ backgroundColor: '#fff', borderRadius: 10, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+          {/* Table header */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: view === 'dept' ? '2fr 80px 80px 80px 140px' : '2fr 100px 80px 80px 80px 140px',
+            backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB',
+            padding: '10px 16px', gap: 12,
+          }}>
+            {(view === 'dept'
+              ? ['Department', 'Total', 'Done', 'Pending', 'Completion']
+              : ['Member', 'Role', 'Total', 'Done', 'Pending', 'Completion']
+            ).map(h => (
+              <p key={h} style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>{h}</p>
+            ))}
           </div>
 
-          {/* Department breakdown */}
-          <h2 className="text-xs font-bold text-gray-400 tracking-widest mb-3">BY DEPARTMENT</h2>
-          <div className="grid gap-3 mb-6">
-            {sortedDepts.length === 0 && <p className="text-gray-400 text-sm text-center py-10">No department data</p>}
-            {sortedDepts.map(d => {
+          {/* Dept rows */}
+          {view === 'dept' && (
+            sortedDepts.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <p style={{ color: '#9CA3AF', fontSize: 13 }}>No department data for this period</p>
+              </div>
+            ) : sortedDepts.map((d, i) => {
               const pct = d.total > 0 ? Math.round((d.completed / d.total) * 100) : 0
               return (
-                <div key={d.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-semibold text-gray-900">{d.name}</p>
-                    <p className="text-xl font-black" style={{ color: pctColor(pct) }}>{pct}%</p>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
-                    <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pctColor(pct) }} />
-                  </div>
-                  <div className="flex gap-4 text-xs text-gray-400">
-                    <span>✓ {d.completed} done</span>
-                    <span>⏳ {d.pending} pending</span>
-                    <span>total {d.total}</span>
+                <div key={d.id} style={{
+                  display: 'grid', gridTemplateColumns: '2fr 80px 80px 80px 140px',
+                  padding: '12px 16px', gap: 12, alignItems: 'center',
+                  borderBottom: i < sortedDepts.length - 1 ? '1px solid #F3F4F6' : 'none',
+                  backgroundColor: i % 2 === 0 ? '#fff' : '#FAFAFA',
+                }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#111', margin: 0 }}>{d.name}</p>
+                  <p style={{ fontSize: 13, color: '#374151', margin: 0 }}>{d.total}</p>
+                  <p style={{ fontSize: 13, color: '#16A34A', fontWeight: 600, margin: 0 }}>{d.completed}</p>
+                  <p style={{ fontSize: 13, color: '#D97706', fontWeight: 600, margin: 0 }}>{d.pending}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1, height: 6, backgroundColor: '#F3F4F6', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: 6, borderRadius: 3, width: `${pct}%`, backgroundColor: pctColor(pct), transition: 'width 0.3s' }} />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: pctColor(pct), minWidth: 32 }}>{pct}%</span>
                   </div>
                 </div>
               )
-            })}
-          </div>
+            })
+          )}
 
-          {/* Member breakdown */}
-          <h2 className="text-xs font-bold text-gray-400 tracking-widest mb-3">BY TEAM MEMBER</h2>
-          <div className="grid gap-3">
-            {sortedMembers.length === 0 && <p className="text-gray-400 text-sm text-center py-10">No member data</p>}
-            {sortedMembers.map(m => {
+          {/* Member rows */}
+          {view === 'member' && (
+            sortedMembers.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <p style={{ color: '#9CA3AF', fontSize: 13 }}>No member data for this period</p>
+              </div>
+            ) : sortedMembers.map((m, i) => {
               const pct = m.total > 0 ? Math.round((m.completed / m.total) * 100) : 0
               return (
-                <div key={m.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="font-semibold text-gray-900">{m.name}</p>
-                      <p className="text-xs text-gray-400">{m.role}</p>
+                <div key={m.id} style={{
+                  display: 'grid', gridTemplateColumns: '2fr 100px 80px 80px 80px 140px',
+                  padding: '12px 16px', gap: 12, alignItems: 'center',
+                  borderBottom: i < sortedMembers.length - 1 ? '1px solid #F3F4F6' : 'none',
+                  backgroundColor: i % 2 === 0 ? '#fff' : '#FAFAFA',
+                }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#111', margin: 0 }}>{m.name}</p>
+                  <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, backgroundColor: '#F3F4F6', color: '#374151', width: 'fit-content' }}>{m.role}</span>
+                  <p style={{ fontSize: 13, color: '#374151', margin: 0 }}>{m.total}</p>
+                  <p style={{ fontSize: 13, color: '#16A34A', fontWeight: 600, margin: 0 }}>{m.completed}</p>
+                  <p style={{ fontSize: 13, color: '#D97706', fontWeight: 600, margin: 0 }}>{m.total - m.completed}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1, height: 6, backgroundColor: '#F3F4F6', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: 6, borderRadius: 3, width: `${pct}%`, backgroundColor: pctColor(pct), transition: 'width 0.3s' }} />
                     </div>
-                    <p className="text-xl font-black" style={{ color: pctColor(pct) }}>{pct}%</p>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
-                    <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pctColor(pct) }} />
-                  </div>
-                  <div className="flex gap-4 text-xs text-gray-400">
-                    <span>✓ {m.completed} done</span>
-                    <span>⏳ {m.total - m.completed} pending</span>
-                    <span>total {m.total}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: pctColor(pct), minWidth: 32 }}>{pct}%</span>
                   </div>
                 </div>
               )
-            })}
-          </div>
-        </>
+            })
+          )}
+        </div>
       )}
+
+      <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 12 }}>
+        {view === 'dept' ? `${sortedDepts.length} departments` : `${sortedMembers.length} members`}
+      </p>
     </div>
   )
 }
