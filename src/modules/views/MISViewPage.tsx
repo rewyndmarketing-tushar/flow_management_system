@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+
 
 type DeptStat = { id: string; name: string; total: number; completed: number; pending: number }
 type MemberStat = { id: string; name: string; role: string; total: number; completed: number }
