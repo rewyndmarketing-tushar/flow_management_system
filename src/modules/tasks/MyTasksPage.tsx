@@ -50,13 +50,11 @@ export default function MyTasksPage() {
           { label: 'Done', value: doneCount, color: '#16A34A', bg: '#F0FDF4' },
         ].map(s => (
           <div key={s.label} style={{
-            backgroundColor: s.bg, borderRadius: 10, padding: '16px 20px',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            backgroundColor: s.bg, borderRadius: 8, padding: '12px 16px',
+            display: 'flex', alignItems: 'center', gap: 12,
           }}>
-            <div>
-              <p style={{ fontSize: 28, fontWeight: 800, color: s.color, margin: 0 }}>{s.value}</p>
-              <p style={{ fontSize: 12, color: '#888', margin: 0, marginTop: 2 }}>{s.label}</p>
-            </div>
+            <p style={{ fontSize: 24, fontWeight: 800, color: s.color, margin: 0 }}>{s.value}</p>
+            <p style={{ fontSize: 12, color: '#888', margin: 0 }}>{s.label}</p>
           </div>
         ))}
       </div>
