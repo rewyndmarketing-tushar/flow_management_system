@@ -142,11 +142,11 @@ export default function DeptCLPage() {
   const [newTask, setNewTask] = useState('')
   const [newTat, setNewTat] = useState('')
   const [newFreq, setNewFreq] = useState('monthly')
-  const [_newPriority, setNewPriority] = useState('medium')
+  const [, setNewPriority] = useState('medium')
   const [freqFilter, setFreqFilter] = useState<string>('all')
   const [editingTask, setEditingTask] = useState<any>(null)
   const [editForm, setEditForm] = useState<any>({})
- const [_extraMarks, _setExtraMarks] = useState<Record<string, Record<number, boolean>>>({})
+ 
 
   async function handleAdd() {
     if (!newTask.trim()) return
@@ -168,14 +168,7 @@ export default function DeptCLPage() {
     setEditingTask(null)
   }
 
-  function toggleDay(taskId: string, day: number, isScheduled: boolean) {
-    // Scheduled days can't be manually untoggled — they're fixed by the schedule
-    if (isScheduled) return
-    setExtraMarks(prev => ({
-      ...prev,
-      [taskId]: { ...(prev[taskId] ?? {}), [day]: !(prev[taskId]?.[day]) }
-    }))
-  }
+  
 
   const availableFreqs = Array.from(new Set(templates.map(t => t.frequency?.toLowerCase()).filter(Boolean)))
   const filtered = freqFilter === 'all'
