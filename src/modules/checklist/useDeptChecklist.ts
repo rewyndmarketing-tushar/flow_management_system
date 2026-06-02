@@ -68,15 +68,20 @@ export function useDeptChecklist(userId: string, _role: string) {
         .eq('task_id', taskId)
         .eq('completed_by', userId)
         .eq('date', today)
+      await supabase.from('tasks')
+        .update({ last_done: null })
+        .eq('id', taskId)
       setCompletedIds(prev => { const s = new Set(prev); s.delete(taskId); return s })
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, last_done: null } : t))
     } else {
       await supabase.from('task_completions')
         .insert({ task_id: taskId, completed_by: userId, date: today })
       await supabase.from('tasks')
-        .update({ last_done: new Date().toISOString() })
+        .update({ last_done: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }).replace(' ', 'T') })
         .eq('id', taskId)
       setCompletedIds(prev => new Set([...prev, taskId]))
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, last_done: today } : t))
+      const nowIST = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }).replace(' ', 'T')
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, last_done: nowIST } : t))
     }
   }
 
@@ -100,14 +105,16 @@ export function useDeptChecklist(userId: string, _role: string) {
     if (selectedDept) loadTasks(selectedDept.id)
   }
 
-  async function addTemplate(task: string, tat: string) {
+  async function addTemplate(task: string, tat: string, type = 'daily', assigned_to = '', sub_category = '') {
     if (!selectedDept) return
     const { data } = await supabase.from('tasks').insert({
       title: task,
-      description: tat,
-      type: 'daily',
+      type,
+      tat: tat || null,
       priority: 'medium',
       department_id: selectedDept.id,
+      assigned_to: assigned_to || null,
+      sub_category: sub_category || null,
       is_active: true,
     }).select().single()
     if (data) setTasks(p => [...p, data])

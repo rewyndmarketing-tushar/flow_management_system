@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useDeptChecklist } from './useDeptChecklist'
 import { useProfile } from '../../components/Layout'
 
@@ -35,10 +35,9 @@ function FreqBadge({ freq }: { freq: string }) {
   )
 }
 
-// ── Calendar helpers ──────────────────────────────────────────────────────────
 const now = new Date()
 const MONTH_LABEL = now.toLocaleString('default', { month: 'long', year: 'numeric' })
-const CURRENT_MONTH_NAME = now.toLocaleString('default', { month: 'short' }).toUpperCase() // e.g. "JUN"
+const CURRENT_MONTH_NAME = now.toLocaleString('default', { month: 'short' }).toUpperCase()
 const DAYS_IN_MONTH = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
 const ALL_DAYS = Array.from({ length: DAYS_IN_MONTH }, (_, i) => i + 1)
 
@@ -54,70 +53,53 @@ function buildWeeks(days: number[]) {
 }
 const WEEKS = buildWeeks(ALL_DAYS)
 
-// Parse a day number from strings like "2nd", "12th", "30", "05th"
 function parseDay(str: string): number {
   const n = parseInt(str.replace(/\D/g, ''), 10)
   return isNaN(n) ? 0 : n
 }
 
-// Check if a month abbreviation matches current month
 function monthMatches(monthStr: string): boolean {
   return monthStr.toUpperCase().includes(CURRENT_MONTH_NAME)
 }
 
-// Returns set of days that should be pre-highlighted (green M) based on freq + tat
 function getScheduledDays(freq: string, tat: string): Set<number> {
   const f = freq?.toLowerCase() ?? ''
   const t = tat?.trim() ?? ''
   const days = new Set<number>()
 
-  if (f === 'daily') {
-    ALL_DAYS.forEach(d => days.add(d))
-    return days
-  }
+  if (f === 'daily') { ALL_DAYS.forEach(d => days.add(d)); return days }
 
   if (f === 'weekly') {
-    // Every 7 days starting from day 1
     for (let d = 1; d <= DAYS_IN_MONTH; d += 7) days.add(d)
     return days
   }
 
   if (f === 'fortnightly') {
-    // Parse "15,30" or "15,31" or default to 15,30
-    if (t) {
-      t.split(',').forEach(s => { const d = parseDay(s); if (d > 0) days.add(d) })
-    } else {
-      days.add(15); days.add(30)
-    }
+    if (t) { t.split(',').forEach(s => { const d = parseDay(s); if (d > 0) days.add(d) }) }
+    else { days.add(15); days.add(30) }
     return days
   }
 
   if (f === 'monthly') {
     if (t) {
-      const cleaned = t.trim().replace(/[^0-9]/g, '')
-      const d = parseInt(cleaned, 10)
+      const d = parseInt(t.trim().replace(/[^0-9]/g, ''), 10)
       if (!isNaN(d) && d > 0 && d <= 31) days.add(d)
     }
     return days
   }
 
   if (f === 'quarterly' || f === 'half yrly' || f === 'yearly') {
-    // e.g. "26th JAN,APR,JUL,OCT" or "05th APR,NOV" or "22th MAR,JUN,SEP,DEC"
     if (!t) return days
-    // Split by space: first part = day, rest = months
     const parts = t.split(' ')
     const dayNum = parseDay(parts[0])
     if (dayNum === 0) return days
-    // Check if any of the listed months match current month
-    const monthsPart = parts.slice(1).join(' ') // "JAN,APR,JUL,OCT"
-    if (monthMatches(monthsPart)) days.add(dayNum)
+    if (monthMatches(parts.slice(1).join(' '))) days.add(dayNum)
     return days
   }
 
   return days
 }
 
-// ── Table cell styles ─────────────────────────────────────────────────────────
 const th: React.CSSProperties = {
   border: '1px solid #D1D5DB', padding: '6px 8px', fontSize: 11,
   fontWeight: 700, color: '#6B7280', backgroundColor: '#F9FAFB',
@@ -128,30 +110,44 @@ const td: React.CSSProperties = {
   verticalAlign: 'middle', whiteSpace: 'nowrap',
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function DeptCLPage() {
   const profile = useProfile()
   const {
-    templates, allDepts, selectedDept, loading,
+    templates, selectedDept, loading,
     setSelectedDept, toggle, addTemplate, editTemplate, deleteTemplate,
     getMyEntry, myDoneCount, progress,
   } = useDeptChecklist(profile.user_id, profile.role)
 
   const isManager = ['owner', 'ea', 'mis'].includes(profile.role)
   const [showAdd, setShowAdd] = useState(false)
+
+  // Listen to dept selection from sub navbar
+  useEffect(() => {
+    const handler = (e: any) => setSelectedDept(e.detail)
+    window.addEventListener('dept-selected', handler)
+    return () => window.removeEventListener('dept-selected', handler)
+  }, [setSelectedDept])
+
+  useEffect(() => {
+    import('../../lib/supabase').then(({ supabase }) => {
+      supabase.from('profiles').select('id,name').eq('is_active', true).order('name')
+        .then(({ data }) => setMembers(data || []))
+    })
+  }, [])
   const [newTask, setNewTask] = useState('')
   const [newTat, setNewTat] = useState('')
   const [newFreq, setNewFreq] = useState('monthly')
-  const [, setNewPriority] = useState('medium')
+  const [newAssignTo, setNewAssignTo] = useState('')
+  const [newSubCat, setNewSubCat] = useState('')
+  const [members, setMembers] = useState<{ id: string; name: string }[]>([])
   const [freqFilter, setFreqFilter] = useState<string>('all')
   const [editingTask, setEditingTask] = useState<any>(null)
   const [editForm, setEditForm] = useState<any>({})
- 
 
   async function handleAdd() {
     if (!newTask.trim()) return
-    await addTemplate(newTask.trim(), newTat.trim() || '')
-    setNewTask(''); setNewTat(''); setNewFreq('monthly'); setNewPriority('medium'); setShowAdd(false)
+    await addTemplate(newTask.trim(), newTat.trim() || '', newFreq, newAssignTo, newSubCat)
+    setNewTask(''); setNewTat(''); setNewFreq('monthly'); setNewAssignTo(''); setNewSubCat(''); setShowAdd(false)
   }
 
   async function handleEdit() {
@@ -168,14 +164,11 @@ export default function DeptCLPage() {
     setEditingTask(null)
   }
 
-  
-
   const availableFreqs = Array.from(new Set(templates.map(t => t.frequency?.toLowerCase()).filter(Boolean)))
-  const filtered = freqFilter === 'all'
-    ? templates
-    : templates.filter(t => t.frequency?.toLowerCase() === freqFilter)
-
+  const filtered = freqFilter === 'all' ? templates : templates.filter(t => t.frequency?.toLowerCase() === freqFilter)
   const pctColor = progress === 100 ? '#16A34A' : progress >= 50 ? '#D97706' : '#DC2626'
+
+  const CATS = ['Office Maintenance', 'Security & Reception', 'Factory Floor Up Keep', 'Courier Sending & Tracking']
 
   return (
     <div>
@@ -201,187 +194,220 @@ export default function DeptCLPage() {
         </div>
       </div>
 
-      {/* Dept tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 0, borderBottom: '1px solid #E5E7EB', overflowX: 'auto' }}>
-        {allDepts.map(dept => (
-          <button key={dept} onClick={() => { setSelectedDept(dept); setFreqFilter('all') }} style={{
-            padding: '8px 16px', fontSize: 13, fontWeight: 600,
-            border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-            borderBottom: selectedDept === dept ? '2px solid #111' : '2px solid transparent',
-            color: selectedDept === dept ? '#111' : '#9CA3AF', marginBottom: -1,
-          }}>{dept}</button>
-        ))}
-      </div>
+      <div>
+        <div>
 
-      {/* Progress bar */}
-      {templates.length > 0 && (
-        <div style={{ height: 3, backgroundColor: '#F3F4F6', overflow: 'hidden', marginBottom: 16 }}>
-          <div style={{ height: 3, width: `${progress}%`, backgroundColor: pctColor, transition: 'width 0.3s' }} />
-        </div>
-      )}
-
-      {/* Freq filter pills */}
-      {availableFreqs.length > 1 && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-          {['all', ...availableFreqs].map(f => (
-            <button key={f} onClick={() => setFreqFilter(f)} style={{
-              padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-              cursor: 'pointer', border: 'none',
-              backgroundColor: freqFilter === f ? '#111' : '#F3F4F6',
-              color: freqFilter === f ? '#fff' : '#6B7280',
-            }}>
-              {f === 'all' ? 'All' : freqLabel(f)}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Add task form */}
-      {showAdd && (
-        <div style={{ backgroundColor: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, padding: 20, marginBottom: 20 }}>
-          <p style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: '0 0 16px' }}>Add Task — {selectedDept}</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>TASK *</label>
-              <input style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Task description" />
+          {/* Progress bar */}
+          {templates.length > 0 && (
+            <div style={{ height: 3, backgroundColor: '#F3F4F6', overflow: 'hidden', marginBottom: 16 }}>
+              <div style={{ height: 3, width: `${progress}%`, backgroundColor: pctColor, transition: 'width 0.3s' }} />
             </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>DUE DATES</label>
-              <input style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                value={newTat} onChange={e => setNewTat(e.target.value)} placeholder="e.g. 12th or 15,30" />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>FREQUENCY</label>
-              <select style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', backgroundColor: '#fff' }}
-                value={newFreq} onChange={e => setNewFreq(e.target.value)}>
-                {['daily','weekly','fortnightly','monthly','quarterly','half yrly','yearly'].map(f => (
-                  <option key={f} value={f}>{freqLabel(f)}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-            <button onClick={() => setShowAdd(false)} style={{ border: '1px solid #E5E7EB', backgroundColor: '#fff', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-            <button onClick={handleAdd} style={{ backgroundColor: '#111', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Add Task</button>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* Table */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px 0' }}>
-          <p style={{ color: '#9CA3AF', fontSize: 13 }}>Loading…</p>
-        </div>
-      ) : templates.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 0' }}>
-          <p style={{ color: '#9CA3AF', fontSize: 14 }}>No tasks for this department yet.</p>
-          {isManager && <p style={{ color: '#9CA3AF', fontSize: 12, marginTop: 4 }}>Add tasks in Task Manager and assign to this department.</p>}
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-        {/* Group by sub_category */}
-        {(() => {
-          const cats = ['Office Maintenance', 'Security & Reception', 'Factory Floor Up Keep', 'Courier Sending & Tracking']
-          const uncategorized = filtered.filter(t => !t.sub_category)
-          const categorized = cats.map(cat => ({ cat, tasks: filtered.filter(t => t.sub_category === cat) })).filter(g => g.tasks.length > 0)
-          const groups = [...categorized, ...(uncategorized.length > 0 ? [{ cat: 'General', tasks: uncategorized }] : [])]
-
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {groups.map(({ cat, tasks: groupTasks }) => (
-                <div key={cat} style={{ flex: '0 0 auto', minWidth: 320, border: '1px solid #E5E7EB', borderRadius: 10, overflow: 'hidden' }}>
-                  {/* Category header */}
-                  <div style={{ backgroundColor: '#1D4ED8', color: '#fff', padding: '8px 14px', fontSize: 12, fontWeight: 700 }}>
-                    {cat}
-                  </div>
-                  <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ ...th, backgroundColor: '#DBEAFE', color: '#1D4ED8', textAlign: 'center' }} colSpan={ALL_DAYS.length + 7}>
-                          {MONTH_LABEL}
-                        </th>
-                      </tr>
-                      <tr>
-                        <th style={{ ...th, backgroundColor: '#F9FAFB' }} colSpan={7} />
-                        {WEEKS.map((wk, wi) => (
-                          <th key={wi} colSpan={wk.length} style={{ ...th, backgroundColor: '#EFF6FF', color: '#2563EB', textAlign: 'center' }}>
-                            W{wi + 1}
-                          </th>
-                        ))}
-                      </tr>
-                      <tr>
-                        <th style={{ ...th, minWidth: 140 }}>Task</th>
-                        <th style={{ ...th, minWidth: 70 }}>Freq</th>
-                        <th style={{ ...th, minWidth: 70 }}>Last Done</th>
-                        <th style={{ ...th, minWidth: 110 }}>Contact Person</th>
-                        <th style={{ ...th, minWidth: 90 }}>Mobile</th>
-                        <th style={{ ...th, minWidth: 110 }}>Accountable</th>
-                        <th style={{ ...th, minWidth: 60 }}>Status</th>
-                        {ALL_DAYS.map(d => (
-                          <th key={d} style={{ ...th, width: 24, minWidth: 24, padding: '3px 1px', textAlign: 'center' }}>{d}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {groupTasks.map(t => {
-                        const myEntry = getMyEntry(t.id)
-                        const isDone = myEntry?.done || false
-                        const scheduledDays = getScheduledDays(t.frequency, t.tat)
-                        return (
-                          <tr key={t.id} style={{ backgroundColor: isDone ? '#F9FAFB' : '#fff' }}>
-                            <td style={td}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <button onClick={() => toggle(t.id, profile.name)} style={{
-                                  width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-                                  border: isDone ? 'none' : '1.5px solid #D1D5DB',
-                                  backgroundColor: isDone ? '#111' : '#fff',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                                }}>
-                                  {isDone && <svg width="9" height="7" viewBox="0 0 11 9" fill="none"><path d="M1 4.5l3 3 6-7" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                                </button>
-                                <span style={{ fontSize: 11, fontWeight: isDone ? 400 : 600, color: isDone ? '#9CA3AF' : '#111', textDecoration: isDone ? 'line-through' : 'none' }}>{t.task}</span>
-                                {isManager && (
-                                  <button onClick={() => { setEditingTask(t); setEditForm({ task: t.task, frequency: t.frequency, tat: t.tat, priority: 'medium', contact_person: t.contact_person, mob: t.mob, person_accountable: t.person_accountable }) }}
-                                    style={{ fontSize: 9, padding: '1px 5px', border: '1px solid #E5E7EB', borderRadius: 3, cursor: 'pointer', backgroundColor: '#fff', color: '#6B7280' }}>
-                                    Edit
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                            <td style={td}><FreqBadge freq={t.frequency} /></td>
-                            <td style={{ ...td, color: '#16A34A', fontSize: 10 }}>{t.last_done ? new Date(t.last_done).toLocaleDateString('en-GB') : '—'}</td>
-                            <td style={{ ...td, fontSize: 11 }}>{t.contact_person || '—'}</td>
-                            <td style={{ ...td, fontSize: 11 }}>{t.mob || '—'}</td>
-                            <td style={{ ...td, fontSize: 11 }}>{t.person_accountable || '—'}</td>
-                            <td style={td}>
-                              <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, backgroundColor: isDone ? '#DCFCE7' : '#FEF9C3', color: isDone ? '#16A34A' : '#CA8A04' }}>
-                                {isDone ? 'Done' : 'Pending'}
-                              </span>
-                            </td>
-                            {ALL_DAYS.map(d => {
-                              const isScheduled = scheduledDays.has(d)
-                              return (
-                                <td key={d} style={{
-                                  ...td, padding: '3px 1px', textAlign: 'center',
-                                  backgroundColor: isScheduled ? '#16A34A' : (isDone ? '#F9FAFB' : '#fff'),
-                                  color: isScheduled ? '#fff' : 'transparent',
-                                  fontWeight: 700, fontSize: 10, cursor: 'default', userSelect: 'none',
-                                }}>M</td>
-                              )
-                            })}
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+          {/* Freq filter pills */}
+          {availableFreqs.length > 1 && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+              {['all', ...availableFreqs].map(f => (
+                <button key={f} onClick={() => setFreqFilter(f)} style={{
+                  padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', border: 'none',
+                  backgroundColor: freqFilter === f ? '#111' : '#F3F4F6',
+                  color: freqFilter === f ? '#fff' : '#6B7280',
+                }}>
+                  {f === 'all' ? 'All' : freqLabel(f)}
+                </button>
               ))}
             </div>
-          )
-        })()}
+          )}
+
+          {/* Add task form */}
+          {showAdd && (
+            <div style={{ backgroundColor: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, padding: 20, marginBottom: 20 }}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: '0 0 16px' }}>Add Task — {selectedDept}</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>ASSIGN TO</label>
+                  <select style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', backgroundColor: '#fff' }}
+                    value={newAssignTo} onChange={e => setNewAssignTo(e.target.value)}>
+                    <option value="">— Unassigned —</option>
+                    {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>TASK *</label>
+                  <input style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                    value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Task description" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>FREQUENCY</label>
+                  <select style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', backgroundColor: '#fff' }}
+                    value={newFreq} onChange={e => setNewFreq(e.target.value.toLowerCase())}>
+                    {['daily','weekly','monthly'].map(f => (
+                      <option key={f} value={f}>{freqLabel(f)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>SUB CATEGORY</label>
+                  <select style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', backgroundColor: '#fff' }}
+                    value={newSubCat} onChange={e => setNewSubCat(e.target.value)}>
+                    <option value="">— None —</option>
+                    {['Office Maintenance','Security & Reception','Factory Floor Up Keep','Courier Sending & Tracking'].map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {newFreq === 'monthly' && (
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>DUE DATE (day of month)</label>
+                  <select style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', backgroundColor: '#fff' }}
+                    value={newTat} onChange={e => setNewTat(e.target.value)}>
+                    <option value="">— Pick a day —</option>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={String(d)}>{d}</option>)}
+                  </select>
+                </div>
+              )}
+              {newFreq === 'weekly' && (
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>DUE DAY</label>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                    {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day => (
+                      <button key={day} type="button"
+                        onClick={() => {
+                          const cur = (newTat || '').split(',').filter(Boolean)
+                          const next = cur.includes(day) ? cur.filter((d: string) => d !== day) : [...cur, day]
+                          setNewTat(next.join(','))
+                        }}
+                        style={{ padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none',
+                          backgroundColor: (newTat || '').split(',').includes(day) ? '#111' : '#F3F4F6',
+                          color: (newTat || '').split(',').includes(day) ? '#fff' : '#6B7280' }}>
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {newFreq === 'daily' && (
+                <div style={{ backgroundColor: '#EFF6FF', borderRadius: 8, padding: '8px 12px' }}>
+                  <p style={{ fontSize: 12, color: '#2563EB', margin: 0 }}>Every day will be marked in the calendar ✓</p>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+                <button onClick={() => setShowAdd(false)} style={{ border: '1px solid #E5E7EB', backgroundColor: '#fff', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleAdd} style={{ backgroundColor: '#111', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Add Task</button>
+              </div>
+            </div>
+          )}
+
+          {/* Table */}
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <p style={{ color: '#9CA3AF', fontSize: 13 }}>Loading…</p>
+            </div>
+          ) : templates.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 0' }}>
+              <p style={{ color: '#9CA3AF', fontSize: 14 }}>No tasks for this department yet.</p>
+              {isManager && <p style={{ color: '#9CA3AF', fontSize: 12, marginTop: 4 }}>Add tasks in Task Manager and assign to this department.</p>}
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {(() => {
+                const uncategorized = filtered.filter(t => !t.sub_category)
+                const categorized = CATS.map(cat => ({ cat, tasks: filtered.filter(t => t.sub_category === cat) })).filter(g => g.tasks.length > 0)
+                const groups = [...categorized, ...(uncategorized.length > 0 ? [{ cat: 'General', tasks: uncategorized }] : [])]
+                return groups.map(({ cat, tasks: groupTasks }) => (
+                  <div key={cat} style={{ border: '1px solid #E5E7EB', borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ backgroundColor: '#1D4ED8', color: '#fff', padding: '8px 14px', fontSize: 12, fontWeight: 700 }}>{cat}</div>
+                    <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...th, backgroundColor: '#DBEAFE', color: '#1D4ED8', textAlign: 'center' }} colSpan={ALL_DAYS.length + 7}>{MONTH_LABEL}</th>
+                        </tr>
+                        <tr>
+                          <th style={{ ...th, backgroundColor: '#F9FAFB' }} colSpan={7} />
+                          {WEEKS.map((wk, wi) => (
+                            <th key={wi} colSpan={wk.length} style={{ ...th, backgroundColor: '#EFF6FF', color: '#2563EB', textAlign: 'center' }}>W{wi + 1}</th>
+                          ))}
+                        </tr>
+                        <tr>
+                          <th style={{ ...th, minWidth: 140 }}>Task</th>
+                          <th style={{ ...th, minWidth: 70 }}>Freq</th>
+                          <th style={{ ...th, minWidth: 70 }}>Last Done</th>
+                          <th style={{ ...th, minWidth: 110 }}>Contact Person</th>
+                          <th style={{ ...th, minWidth: 90 }}>Mobile</th>
+                          <th style={{ ...th, minWidth: 110 }}>Accountable</th>
+                          <th style={{ ...th, minWidth: 60 }}>Status</th>
+                          {ALL_DAYS.map(d => (
+                            <th key={d} style={{ ...th, width: 24, minWidth: 24, padding: '3px 1px', textAlign: 'center' }}>{d}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupTasks.map(t => {
+                          const myEntry = getMyEntry(t.id)
+                          const isDone = myEntry?.done || false
+                          const scheduledDays = getScheduledDays(t.frequency, t.tat)
+                          return (
+                            <tr key={t.id} style={{ backgroundColor: isDone ? '#F9FAFB' : '#fff' }}>
+                              <td style={td}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <button onClick={() => toggle(t.id, profile.name)} style={{
+                                    width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                                    border: isDone ? 'none' : '1.5px solid #D1D5DB',
+                                    backgroundColor: isDone ? '#111' : '#fff',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                                  }}>
+                                    {isDone && <svg width="9" height="7" viewBox="0 0 11 9" fill="none"><path d="M1 4.5l3 3 6-7" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                  </button>
+                                  <span style={{ fontSize: 11, fontWeight: isDone ? 400 : 600, color: isDone ? '#9CA3AF' : '#111', textDecoration: isDone ? 'line-through' : 'none' }}>{t.task}</span>
+                                  {isManager && (
+                                    <button onClick={() => { setEditingTask(t); setEditForm({ task: t.task, frequency: t.frequency, tat: t.tat, priority: 'medium', contact_person: t.contact_person, mob: t.mob, person_accountable: t.person_accountable }) }}
+                                      style={{ fontSize: 9, padding: '1px 5px', border: '1px solid #E5E7EB', borderRadius: 3, cursor: 'pointer', backgroundColor: '#fff', color: '#6B7280' }}>
+                                      Edit
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                              <td style={td}><FreqBadge freq={t.frequency} /></td>
+                              <td style={{ ...td, color: '#16A34A', fontSize: 10 }}>{t.last_done ? new Date(t.last_done).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                              <td style={{ ...td, fontSize: 11 }}>{t.contact_person || '—'}</td>
+                              <td style={{ ...td, fontSize: 11 }}>{t.mob || '—'}</td>
+                              <td style={{ ...td, fontSize: 11 }}>{t.person_accountable || '—'}</td>
+                              <td style={td}>
+                                <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, backgroundColor: isDone ? '#DCFCE7' : '#FEF9C3', color: isDone ? '#16A34A' : '#CA8A04' }}>
+                                  {isDone ? 'Done' : 'Pending'}
+                                </span>
+                              </td>
+                              {ALL_DAYS.map(d => {
+                                const isScheduled = scheduledDays.has(d)
+                                return (
+                                  <td key={d} style={{
+                                    ...td, padding: '3px 1px', textAlign: 'center',
+                                    backgroundColor: isScheduled ? '#16A34A' : (isDone ? '#F9FAFB' : '#fff'),
+                                    color: isScheduled ? '#fff' : 'transparent',
+                                    fontWeight: 700, fontSize: 10, cursor: 'default', userSelect: 'none',
+                                  }}>M</td>
+                                )
+                              })}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ))
+              })()}
+            </div>
+          )}
+
+          <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 12 }}>
+            {myDoneCount} of {templates.length} completed
+            {freqFilter !== 'all' && ` · showing ${freqLabel(freqFilter)} tasks only`}
+          </p>
+
         </div>
-      )}
+      </div>
 
       {/* Edit modal */}
       {editingTask && (
@@ -481,11 +507,6 @@ export default function DeptCLPage() {
           </div>
         </div>
       )}
-
-      <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 12 }}>
-        {myDoneCount} of {templates.length} completed
-        {freqFilter !== 'all' && ` · showing ${freqLabel(freqFilter)} tasks only`}
-      </p>
     </div>
   )
 }

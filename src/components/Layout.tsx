@@ -1,8 +1,9 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../modules/auth/useAuth'
 import { ROLE_CONFIG, TAB_LABELS, TAB_ROUTES } from '../lib/constants'
 import type { Profile } from '../lib/types'
+import { supabase } from '../lib/supabase'
 import {
   CheckSquare, ListTodo, Users, Briefcase, Building2,
   GitBranch, Shield, BarChart2, TrendingUp, Layers,
@@ -177,9 +178,27 @@ export default function Layout({ profile, children }: { profile: Profile; childr
             }}>{config.label}</span>
           </div>
 
-          <div style={{ flex: 1, width: '100%', padding: '24px', overflowY: 'auto' }}>
-            {children}
-          </div>
+          {location.pathname === '/deptcl' ? (
+            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+              {/* Left dept nav */}
+              <div style={{
+                width: 140, flexShrink: 0, borderRight: `1px solid ${dark ? '#2A2A2A' : '#E5E7EB'}`,
+                backgroundColor: dark ? '#1A1A1A' : '#F3F4F6',
+                padding: '12px 8px', overflowY: 'auto',
+              }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 8px 4px' }}>Departments</p>
+                <DeptSubNav dark={dark} vertical={true} />
+              </div>
+              {/* Content */}
+              <div style={{ flex: 1, padding: '24px', overflowY: 'auto', height: '100%' }}>
+                {children}
+              </div>
+            </div>
+          ) : (
+            <div style={{ flex: 1, width: '100%', padding: '24px', overflowY: 'auto' }}>
+              {children}
+            </div>
+          )}
         </div>
       </div>
     </ProfileContext.Provider>
@@ -223,6 +242,59 @@ function NavItem({ tab, collapsed, active, dark, itemColor, icon }: {
       <span style={{ flexShrink: 0, display: 'flex' }}>{icon}</span>
       {!collapsed && <span>{TAB_LABELS[tab]}</span>}
     </Link>
+  )
+}
+
+function DeptSubNav({ dark, vertical = false }: { dark: boolean; vertical?: boolean }) {
+  const [depts, setDepts] = useState<{ id: string; name: string }[]>([])
+  const [selected, setSelected] = useState('')
+
+  useEffect(() => {
+    supabase.from('departments').select('id,name').eq('is_active', true).order('name')
+      .then(({ data }) => {
+        setDepts(data || [])
+        if (data && data.length > 0) setSelected(data[0].name)
+      })
+  }, [])
+
+  // Broadcast selected dept via custom event so DeptCLPage can listen
+  function selectDept(name: string) {
+    setSelected(name)
+    window.dispatchEvent(new CustomEvent('dept-selected', { detail: name }))
+  }
+
+  if (vertical) return (
+    <>
+      {depts.map(d => (
+        <button key={d.id} onClick={() => selectDept(d.name)} style={{
+          display: 'block', width: '100%', textAlign: 'left',
+          padding: '8px 10px', fontSize: 13, fontWeight: 600,
+          border: 'none', cursor: 'pointer', borderRadius: 6,
+          backgroundColor: selected === d.name ? '#111' : 'transparent',
+          color: selected === d.name ? '#fff' : '#6B7280',
+          marginBottom: 2,
+        }}>{d.name}</button>
+      ))}
+    </>
+  )
+
+  return (
+    <div style={{
+      borderBottom: `1px solid ${dark ? '#2A2A2A' : '#E5E7EB'}`,
+      backgroundColor: dark ? '#1A1A1A' : '#fff',
+      padding: '0 24px', display: 'flex', gap: 4, overflowX: 'auto',
+      flexShrink: 0,
+    }}>
+      {depts.map(d => (
+        <button key={d.id} onClick={() => selectDept(d.name)} style={{
+          padding: '8px 14px', fontSize: 13, fontWeight: 600,
+          border: 'none', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+          borderBottom: selected === d.name ? '2px solid #111' : '2px solid transparent',
+          color: selected === d.name ? (dark ? '#fff' : '#111') : '#9CA3AF',
+          marginBottom: -1,
+        }}>{d.name}</button>
+      ))}
+    </div>
   )
 }
 
