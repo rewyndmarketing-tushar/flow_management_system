@@ -117,9 +117,7 @@ export function useDeptChecklist(userId: string, _role: string) {
     return completedIds.has(taskId) ? { done: true } : null
   }
 
-  function getAllEntries(taskId: string) {
-    return completedIds.has(taskId) ? [{ user_name: 'Done' }] : []
-  }
+  
 
   const templates = tasks.map(t => ({
     id: t.id,
