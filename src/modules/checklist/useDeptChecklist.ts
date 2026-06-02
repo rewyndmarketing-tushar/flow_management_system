@@ -19,7 +19,7 @@ export interface DeptEntry {
   done: boolean
 }
 
-export function useDeptChecklist(userId: string, role: string) {
+export function useDeptChecklist(userId: string, _role: string) {
   const [tasks, setTasks] = useState<any[]>([])
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
   const [allDepts, setAllDepts] = useState<{ id: string; name: string }[]>([])
