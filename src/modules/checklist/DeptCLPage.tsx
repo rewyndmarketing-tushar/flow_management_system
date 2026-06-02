@@ -134,7 +134,7 @@ export default function DeptCLPage() {
   const {
     templates, allDepts, selectedDept, loading,
     setSelectedDept, toggle, addTemplate, editTemplate, deleteTemplate,
-    getMyEntry, getAllEntries, myDoneCount, progress,
+    getMyEntry, myDoneCount, progress,
   } = useDeptChecklist(profile.user_id, profile.role)
 
   const isManager = ['owner', 'ea', 'mis'].includes(profile.role)
@@ -142,11 +142,11 @@ export default function DeptCLPage() {
   const [newTask, setNewTask] = useState('')
   const [newTat, setNewTat] = useState('')
   const [newFreq, setNewFreq] = useState('monthly')
-  const [newPriority, setNewPriority] = useState('medium')
+  const [_newPriority, setNewPriority] = useState('medium')
   const [freqFilter, setFreqFilter] = useState<string>('all')
   const [editingTask, setEditingTask] = useState<any>(null)
   const [editForm, setEditForm] = useState<any>({})
- const [extraMarks, setExtraMarks] = useState<Record<string, Record<number, boolean>>>({})
+ const [_extraMarks, _setExtraMarks] = useState<Record<string, Record<number, boolean>>>({})
 
   async function handleAdd() {
     if (!newTask.trim()) return

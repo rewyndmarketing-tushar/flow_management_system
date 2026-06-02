@@ -27,7 +27,7 @@ export function useDeptChecklist(userId: string, role: string) {
   const [loading, setLoading] = useState(true)
   const today = new Date().toISOString().split('T')[0]
 
-  const isManager = ['owner', 'ea', 'mis'].includes(role)
+  const _isManager = ['owner', 'ea', 'mis'].includes(role)
 
   useEffect(() => { loadDepts() }, [])
   useEffect(() => { if (selectedDept) loadTasks(selectedDept.id) }, [selectedDept])
