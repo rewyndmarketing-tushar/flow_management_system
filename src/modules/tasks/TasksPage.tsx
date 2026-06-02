@@ -28,6 +28,7 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly'>('all')
   const [modal, setModal] = useState(false)
+  const [editing, setEditing] = useState<Task | null>(null)
   const [form, setForm] = useState<any>({ type: 'daily', priority: 'medium', is_active: true })
   const [saving, setSaving] = useState(false)
 
@@ -53,20 +54,43 @@ export default function TasksPage() {
     setLoading(false)
   }
 
+  function openEdit(t: Task) {
+    setEditing(t)
+    setForm({
+      title: t.title,
+      description: t.description,
+      type: t.type,
+      priority: t.priority,
+      department_id: t.department?.id || '',
+      assigned_to: (t.assigned as any)?.id || '',
+      tat: (t as any).tat || '',
+      sub_category: (t as any).sub_category || '',
+    })
+    setModal(true)
+  }
+
   async function save() {
-    if (!form.title?.trim()) return alert('Title required')
+    if (!form.title?.trim()) return alert('Task name required')
     setSaving(true)
-    await supabase.from('tasks').insert({
+    const payload = {
       title: form.title.trim(),
       description: form.description?.trim() || '',
       type: form.type,
       priority: form.priority,
       department_id: form.department_id || null,
       assigned_to: form.assigned_to || null,
-      is_active: true,
-    })
+      tat: form.tat || null,
+      sub_category: form.sub_category || null,
+
+    }
+    if (editing) {
+      await supabase.from('tasks').update(payload).eq('id', editing.id)
+    } else {
+      await supabase.from('tasks').insert({ ...payload, is_active: true })
+    }
     setSaving(false)
     setModal(false)
+    setEditing(null)
     setForm({ type: 'daily', priority: 'medium' })
     fetchAll()
   }
@@ -90,7 +114,7 @@ export default function TasksPage() {
           <p className="text-sm text-gray-500 mt-0.5">Manage and assign tasks across the organisation</p>
         </div>
         {isManager && (
-          <button onClick={() => setModal(true)}
+          <button onClick={() => { setEditing(null); setForm({ type: 'daily', priority: 'medium' }); setModal(true) }}
             className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition">
             + Add Task
           </button>
@@ -148,6 +172,10 @@ export default function TasksPage() {
                 </div>
                 {isManager && (
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => openEdit(t)}
+                      className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">
+                      Edit
+                    </button>
                     <button onClick={() => toggleActive(t)}
                       className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
                         t.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'
@@ -169,25 +197,51 @@ export default function TasksPage() {
       {/* Modal */}
       {modal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Add New Task</h2>
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">{editing ? 'Edit Task' : 'Add New Task'}</h2>
             <div className="flex flex-col gap-4">
+
+              {/* 1. Department */}
               <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Title *</label>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</label>
+                <select className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  value={form.department_id || ''} onChange={e => setForm((p: any) => ({ ...p, department_id: e.target.value }))}>
+                  <option value="">— None —</option>
+                  {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+
+              {/* 2. Assign To */}
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Assign To</label>
+                <select className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  value={form.assigned_to || ''} onChange={e => setForm((p: any) => ({ ...p, assigned_to: e.target.value }))}>
+                  <option value="">— Unassigned —</option>
+                  {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+
+              {/* 3. Task Name */}
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Task *</label>
                 <input className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   value={form.title || ''} onChange={e => setForm((p: any) => ({ ...p, title: e.target.value }))}
-                  placeholder="e.g. Update job status board" />
+                  placeholder="e.g. CCTV check, Electricity bill" />
               </div>
+
+              {/* 4. Description */}
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Description</label>
                 <textarea className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 h-16 resize-none"
                   value={form.description || ''} onChange={e => setForm((p: any) => ({ ...p, description: e.target.value }))} />
               </div>
+
+              {/* 5. Type + Priority */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</label>
                   <select className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                    value={form.type} onChange={e => setForm((p: any) => ({ ...p, type: e.target.value }))}>
+                    value={form.type} onChange={e => setForm((p: any) => ({ ...p, type: e.target.value, tat: '' }))}>
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
                     <option value="monthly">Monthly</option>
@@ -203,31 +257,74 @@ export default function TasksPage() {
                   </select>
                 </div>
               </div>
+
+              {/* 6. Sub Category */}
               <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</label>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sub Category</label>
                 <select className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  value={form.department_id || ''} onChange={e => setForm((p: any) => ({ ...p, department_id: e.target.value }))}>
+                  value={form.sub_category || ''} onChange={e => setForm((p: any) => ({ ...p, sub_category: e.target.value }))}>
                   <option value="">— None —</option>
-                  {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  <option value="Office Maintenance">Office Maintenance</option>
+                  <option value="Security & Reception">Security & Reception</option>
+                  <option value="Factory Floor Up Keep">Factory Floor Up Keep</option>
+                  <option value="Courier Sending & Tracking">Courier Sending & Tracking</option>
                 </select>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Assign To</label>
-                <select className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  value={form.assigned_to || ''} onChange={e => setForm((p: any) => ({ ...p, assigned_to: e.target.value }))}>
-                  <option value="">— Unassigned —</option>
-                  {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
-              </div>
+
+              {/* 6. Due Date — dynamic by type */}
+              {form.type === 'daily' && (
+                <div className="bg-blue-50 rounded-lg px-3 py-2">
+                  <p className="text-xs text-blue-600 font-medium">Every day will be marked in the calendar ✓</p>
+                </div>
+              )}
+
+              {form.type === 'weekly' && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Due Day (pick one or more)</label>
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day => (
+                      <button key={day} type="button"
+                        onClick={() => {
+                          const current = (form.tat || '').split(',').filter(Boolean)
+                          const next = current.includes(day)
+                            ? current.filter((d: string) => d !== day)
+                            : [...current, day]
+                          setForm((p: any) => ({ ...p, tat: next.join(',') }))
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                          (form.tat || '').split(',').includes(day)
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-white text-gray-500 border-gray-200'
+                        }`}>
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {form.type === 'monthly' && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Due Date (day of month)</label>
+                  <select className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    value={form.tat || ''} onChange={e => setForm((p: any) => ({ ...p, tat: e.target.value }))}>
+                    <option value="">— Pick a day —</option>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                      <option key={d} value={String(d)}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setModal(false)}
+              <button onClick={() => { setModal(false); setEditing(null) }}
                 className="flex-1 border border-gray-200 text-gray-600 text-sm font-semibold py-2.5 rounded-lg hover:bg-gray-50 transition">
                 Cancel
               </button>
               <button onClick={save} disabled={saving}
                 className="flex-1 bg-indigo-600 text-white text-sm font-semibold py-2.5 rounded-lg hover:bg-indigo-700 transition disabled:opacity-50">
-                {saving ? 'Saving…' : 'Save Task'}
+                {saving ? 'Saving…' : editing ? 'Update Task' : 'Save Task'}
               </button>
             </div>
           </div>

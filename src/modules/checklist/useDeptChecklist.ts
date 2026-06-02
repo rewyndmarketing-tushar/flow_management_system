@@ -19,115 +19,136 @@ export interface DeptEntry {
   done: boolean
 }
 
-const DEPT_MAP: Record<string, string[]> = {
-  'Sales':       ['owner', 'crm', 'ea'],
-  'Production':  ['pc-production', 'pc-rigid'],
-  'Dispatch':    ['pc-dispatch'],
-  'Purchase':    ['pc-purchase'],
-  'Finance':     ['pc-finance'],
-  'Admin & HR':  ['pc-admin'],
-  'Systems':     ['mis'],
-}
-
-export function getDeptForRole(role: string): string {
-  for (const [dept, roles] of Object.entries(DEPT_MAP)) {
-    if (roles.includes(role)) return dept
-  }
-  return 'General'
-}
-
 export function useDeptChecklist(userId: string, role: string) {
-  const [templates, setTemplates] = useState<DeptTemplate[]>([])
-  const [entries, setEntries] = useState<DeptEntry[]>([])
-  const [allDepts, setAllDepts] = useState<string[]>([])
-  const [selectedDept, setSelectedDept] = useState<string>('')
+  const [tasks, setTasks] = useState<any[]>([])
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+  const [allDepts, setAllDepts] = useState<{ id: string; name: string }[]>([])
+  const [selectedDept, setSelectedDept] = useState<{ id: string; name: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const today = new Date().toISOString().split('T')[0]
-  const myDept = getDeptForRole(role)
 
-  useEffect(() => {
-    loadDepts()
-  }, [])
+  const isManager = ['owner', 'ea', 'mis'].includes(role)
 
-  useEffect(() => {
-    if (selectedDept) loadTemplates(selectedDept)
-  }, [selectedDept])
+  useEffect(() => { loadDepts() }, [])
+  useEffect(() => { if (selectedDept) loadTasks(selectedDept.id) }, [selectedDept])
 
   async function loadDepts() {
     const { data } = await supabase
-      .from('dept_checklist_templates')
-      .select('department')
-    const depts = [...new Set(data?.map(d => d.department) || [])]
-    setAllDepts(depts)
-    const defaultDept = depts.includes(myDept) ? myDept : depts[0] || myDept
-    setSelectedDept(defaultDept)
+      .from('departments')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('name')
+    setAllDepts(data || [])
+    if (data && data.length > 0) setSelectedDept(data[0])
     setLoading(false)
   }
 
-  const loadTemplates = useCallback(async (dept: string) => {
+  const loadTasks = useCallback(async (deptId: string) => {
     setLoading(true)
-    const { data: tmpl } = await supabase
-      .from('dept_checklist_templates')
-      .select('*')
-      .eq('department', dept)
-      .order('order')
-    setTemplates(tmpl || [])
-
-    if (tmpl?.length) {
-      const { data: ent } = await supabase
-        .from('dept_checklist_entries')
+    const [{ data: taskData }, { data: completions }] = await Promise.all([
+      supabase.from('tasks')
         .select('*')
-        .in('template_id', tmpl.map(t => t.id))
+        .eq('department_id', deptId)
+        .eq('is_active', true)
+        .order('created_at'),
+      supabase.from('task_completions')
+        .select('task_id, completed_by')
         .eq('date', today)
-      setEntries(ent || [])
-    } else {
-      setEntries([])
-    }
+    ])
+    setTasks(taskData || [])
+    setCompletedIds(new Set((completions || []).map(c => c.task_id)))
     setLoading(false)
   }, [today])
 
-  async function toggle(templateId: string, userName: string) {
-    const existing = entries.find(e => e.template_id === templateId && e.user_id === userId)
-    if (existing) {
-      const { data } = await supabase
-        .from('dept_checklist_entries')
-        .update({ done: !existing.done, updated_at: new Date().toISOString() })
-        .eq('id', existing.id).select().single()
-      if (data) setEntries(p => p.map(e => e.id === data.id ? data : e))
+  async function toggle(taskId: string, _userName: string) {
+    const isDone = completedIds.has(taskId)
+    if (isDone) {
+      await supabase.from('task_completions')
+        .delete()
+        .eq('task_id', taskId)
+        .eq('completed_by', userId)
+        .eq('date', today)
+      setCompletedIds(prev => { const s = new Set(prev); s.delete(taskId); return s })
     } else {
-      const { data } = await supabase
-        .from('dept_checklist_entries')
-        .insert({ template_id: templateId, user_id: userId, user_name: userName, date: today, done: true })
-        .select().single()
-      if (data) setEntries(p => [...p, data])
+      await supabase.from('task_completions')
+        .insert({ task_id: taskId, completed_by: userId, date: today })
+      await supabase.from('tasks')
+        .update({ last_done: new Date().toISOString() })
+        .eq('id', taskId)
+      setCompletedIds(prev => new Set([...prev, taskId]))
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, last_done: today } : t))
     }
+  }
+
+  async function editTemplate(id: string, updates: { title: string; type: string; tat: string; priority: string; assigned_to?: string }) {
+    await supabase.from('tasks').update({
+      title: updates.title,
+      type: updates.type,
+      tat: updates.tat || null,
+      priority: updates.priority,
+      assigned_to: updates.assigned_to || null,
+      contact_person: (updates as any).contact_person || null,
+      mob: (updates as any).mob || null,
+      person_accountable: (updates as any).person_accountable || null,
+    }).eq('id', id)
+    if (selectedDept) await loadTasks(selectedDept.id)
+  }
+
+  async function deleteTemplate(id: string) {
+    if (!window.confirm('Delete this task?')) return
+    await supabase.from('tasks').delete().eq('id', id)
+    if (selectedDept) loadTasks(selectedDept.id)
   }
 
   async function addTemplate(task: string, tat: string) {
-    const { data } = await supabase
-      .from('dept_checklist_templates')
-      .insert({ department: selectedDept, task, tat, frequency: 'daily', order: templates.length })
-      .select().single()
-    if (data) {
-      setTemplates(p => [...p, data])
-    }
+    if (!selectedDept) return
+    const { data } = await supabase.from('tasks').insert({
+      title: task,
+      description: tat,
+      type: 'daily',
+      priority: 'medium',
+      department_id: selectedDept.id,
+      is_active: true,
+    }).select().single()
+    if (data) setTasks(p => [...p, data])
   }
 
-  function getMyEntry(templateId: string) {
-    return entries.find(e => e.template_id === templateId && e.user_id === userId)
+  function getMyEntry(taskId: string) {
+    return completedIds.has(taskId) ? { done: true } : null
   }
 
-  function getAllEntries(templateId: string) {
-    return entries.filter(e => e.template_id === templateId && e.done)
+  function getAllEntries(taskId: string) {
+    return completedIds.has(taskId) ? [{ user_name: 'Done' }] : []
   }
 
-  const myDoneCount = templates.filter(t => getMyEntry(t.id)?.done).length
-  const progress = templates.length ? Math.round(myDoneCount / templates.length * 100) : 0
+  const templates = tasks.map(t => ({
+    id: t.id,
+    department: selectedDept?.name || '',
+    task: t.title,
+    tat: t.tat || '',
+    frequency: t.type,
+    order: 0,
+    last_done: t.last_done || null,
+    contact_person: t.contact_person || '',
+    mob: t.mob || '',
+    person_accountable: t.person_accountable || '',
+    sub_category: t.sub_category || '',
+  }))
+
+  const myDoneCount = tasks.filter(t => completedIds.has(t.id)).length
+  const progress = tasks.length ? Math.round(myDoneCount / tasks.length * 100) : 0
+  const myDept = selectedDept?.name || ''
 
   return {
-    templates, entries, allDepts, selectedDept, loading,
-    setSelectedDept, toggle, addTemplate,
+    templates, entries: [], allDepts: allDepts.map(d => d.name),
+    selectedDept: selectedDept?.name || '',
+    setSelectedDept: (name: string) => {
+      const dept = allDepts.find(d => d.name === name)
+      if (dept) setSelectedDept(dept)
+    },
+    toggle, addTemplate, editTemplate, deleteTemplate,
     getMyEntry, getAllEntries,
-    myDoneCount, progress, myDept
+    myDoneCount, progress, myDept,
+    loading,
   }
 }
