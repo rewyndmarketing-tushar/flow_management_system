@@ -70,9 +70,18 @@ function getScheduledDays(freq: string, tat: string): Set<number> {
   if (f === 'daily') { ALL_DAYS.forEach(d => days.add(d)); return days }
 
   if (f === 'weekly') {
+  const DAY_MAP: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  const selectedDays = t.split(',').filter(Boolean)
+  if (selectedDays.length === 0) {
     for (let d = 1; d <= DAYS_IN_MONTH; d += 7) days.add(d)
     return days
   }
+  for (let d = 1; d <= DAYS_IN_MONTH; d++) {
+    const dow = new Date(now.getFullYear(), now.getMonth(), d).getDay()
+    if (selectedDays.some(sd => DAY_MAP[sd] === dow)) days.add(d)
+  }
+  return days
+}
 
   if (f === 'fortnightly') {
     if (t) { t.split(',').forEach(s => { const d = parseDay(s); if (d > 0) days.add(d) }) }
